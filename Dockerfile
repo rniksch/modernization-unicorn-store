@@ -15,4 +15,5 @@ RUN dotnet publish -c Release -o out
 FROM microsoft/dotnet:2.2-aspnetcore-runtime-alpine AS runtime
 WORKDIR /app
 COPY --from=build /app/UnicornStore/out ./
+EXPOSE 80
 ENTRYPOINT ["dotnet", "UnicornStore.dll"]
