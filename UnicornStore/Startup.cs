@@ -25,7 +25,8 @@ namespace UnicornStore
             // can be overridden by a different setting while deployed remotely.
             var builder = new ConfigurationBuilder()
                 .SetBasePath(hostingEnvironment.ContentRootPath)
-                .AddJsonFile("config.json")
+                //.AddJsonFile("config.json")
+                .AddJsonFile($"appsettings.{hostingEnvironment.EnvironmentName}.json", optional: false, reloadOnChange: true)
                 //All environment variables in the process's context flow in as configuration values.
                 .AddEnvironmentVariables();
 
