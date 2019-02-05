@@ -83,7 +83,8 @@ namespace UnicornStore.Models
 
             var builder = new ConfigurationBuilder()
                 .SetBasePath(env.ContentRootPath)
-                .AddJsonFile("config.json")
+                //.AddJsonFile("config.json")
+                .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: false, reloadOnChange: true)
                 .AddEnvironmentVariables();
             var configuration = builder.Build();
 
