@@ -49,7 +49,7 @@ namespace UnicornStore
             }
             else
             {
-            services.AddDbContext<UnicornStoreContext>(options =>
+                services.AddDbContext<UnicornStoreContext>(options =>
                     options.UseSqlServer(Configuration[StoreConfig.ConnectionStringKey.Replace("__", ":")]));
             }
 
