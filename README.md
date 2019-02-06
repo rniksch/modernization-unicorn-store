@@ -5,13 +5,15 @@ modernization-unicorn-store
 
 ## Running locally
 
-To play the game:
-
 Default page:
 * http://localhost
 
-# Run docker-compose up to start the Unicorn Store
+# Building the images
 
-### To Do (Insert some stuff later)
+If you are testing locally on a Mac or Linux system and want to use the InMemoryStore then set the value "UseInMemoryStore": true in the appsettings.Development.json file.
+
+docker-compose build
+
+docker-compose -f docker-compose.yml -f docker-compose.development.yml up
 
 ---
