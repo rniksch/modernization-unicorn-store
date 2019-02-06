@@ -40,15 +40,16 @@ namespace UnicornStore
         {
             services.Configure<AppSettings>(Configuration.GetSection("AppSettings"));
 
+            // Control whether InMemoryStore is used on Mac or for local development with AppSettings
             // Add EF services to the services container
-            if (_platform.UseInMemoryStore)
+            if (_platform.UseInMemoryStore && Configuration.GetSection("AppSettings")["UseInMemoryStore"] == "True")
             {
                 services.AddDbContext<UnicornStoreContext>(options =>
                     options.UseInMemoryDatabase("Scratch"));
             }
             else
             {
-                services.AddDbContext<UnicornStoreContext>(options =>
+            services.AddDbContext<UnicornStoreContext>(options =>
                     options.UseSqlServer(Configuration[StoreConfig.ConnectionStringKey.Replace("__", ":")]));
             }
 
