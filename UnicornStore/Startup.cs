@@ -11,12 +11,15 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using UnicornStore.Components;
 using UnicornStore.Models;
+using System.Data.SqlClient;
+using Newtonsoft.Json.Linq;
 
 namespace UnicornStore
 {
     public class Startup
     {
         private readonly Platform _platform;
+        private string _connection = null;
 
         public Startup(IHostingEnvironment hostingEnvironment)
         {
@@ -29,6 +32,11 @@ namespace UnicornStore
                 .AddJsonFile($"appsettings.{hostingEnvironment.EnvironmentName}.json", optional: false, reloadOnChange: true)
                 //All environment variables in the process's context flow in as configuration values.
                 .AddEnvironmentVariables();
+
+            if (hostingEnvironment.IsDevelopment())
+            {
+                builder.AddUserSecrets<Startup>();
+            }            
 
             Configuration = builder.Build();
             _platform = new Platform();
@@ -47,10 +55,42 @@ namespace UnicornStore
                 services.AddDbContext<UnicornStoreContext>(options =>
                     options.UseInMemoryDatabase("Scratch"));
             }
-            else
+            // Control whether to LocalDB is used on Windows boxes for local devleopment with AppSettings
+            if (_platform.IsRunningOnWindows && Configuration.GetSection("AppSettings")["UseLocalDB"] == "True")
             {
                 services.AddDbContext<UnicornStoreContext>(options =>
-                    options.UseSqlServer(Configuration[StoreConfig.ConnectionStringKey.Replace("__", ":")]));
+                options.UseSqlServer(Configuration[StoreConfig.ConnectionStringKey.Replace("__", ":")]));
+            }
+            // Control whether to run the container in Fargate. 
+            // Relies on RDS Secrets from AWS Secrets Manager to be passed as Environment Variables to the container
+            if (Configuration.GetSection("AppSettings")["RunInFargate"] == "True")
+            {
+                var unicorn_envvariables = Configuration["unicorn-secret"];
+                JObject parsed_json = JObject.Parse(unicorn_envvariables);
+
+                var sqlconnectionbuilder = new SqlConnectionStringBuilder();
+                sqlconnectionbuilder.ConnectionString = "Database=UnicornStore;Trusted_Connection=False;MultipleActiveResultSets=true;Connect Timeout=30;";
+                sqlconnectionbuilder.Password = (string)parsed_json["password"];
+                sqlconnectionbuilder.UserID = (string)parsed_json["username"];
+                sqlconnectionbuilder.DataSource = (string)parsed_json["host"];
+                _connection = sqlconnectionbuilder.ConnectionString;
+
+                services.AddDbContext<UnicornStoreContext>(options =>
+                    options.UseSqlServer(_connection));
+            }
+            // Fallback for local testing with User Secrets
+            // Read about secrets here: https://docs.microsoft.com/en-us/aspnet/core/fundamentals/environments?view=aspnetcore-2.2
+            else
+            {
+                var sqlconnectionbuilder = new SqlConnectionStringBuilder();
+                sqlconnectionbuilder.ConnectionString = "Database=UnicornStore;Trusted_Connection=False;MultipleActiveResultSets=true;Connect Timeout=30;";
+                sqlconnectionbuilder.Password = Configuration["UnicornStore-Secret:password"];
+                sqlconnectionbuilder.UserID = Configuration["UnicornStore-Secret:username"];
+                sqlconnectionbuilder.DataSource = Configuration["UnicornStore-Secret:host"];
+                _connection = sqlconnectionbuilder.ConnectionString;
+
+                services.AddDbContext<UnicornStoreContext>(options =>
+                    options.UseSqlServer(_connection));
             }
 
             // Add Identity services to the services container
