@@ -11,12 +11,15 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using UnicornStore.Components;
 using UnicornStore.Models;
+using System.Data.SqlClient;
+using Newtonsoft.Json.Linq;
 
 namespace UnicornStore
 {
     public class Startup
     {
         private readonly Platform _platform;
+        private string _connection = null;
 
         public Startup(IHostingEnvironment hostingEnvironment)
         {
@@ -30,6 +33,11 @@ namespace UnicornStore
                 //All environment variables in the process's context flow in as configuration values.
                 .AddEnvironmentVariables();
 
+            if (hostingEnvironment.IsDevelopment())
+            {
+                builder.AddUserSecrets<Startup>();
+            }
+
             Configuration = builder.Build();
             _platform = new Platform();
         }
@@ -41,16 +49,73 @@ namespace UnicornStore
             services.Configure<AppSettings>(Configuration.GetSection("AppSettings"));
 
             // Control whether InMemoryStore is used on Mac or for local development with AppSettings
-            // Add EF services to the services container
-            if (_platform.UseInMemoryStore && Configuration.GetSection("AppSettings")["UseInMemoryStore"] == "True")
+            if (_platform.UseInMemoryStore)
             {
-                services.AddDbContext<UnicornStoreContext>(options =>
+                // For local testing on Mac with User Secrets
+                // Read about secrets here: https://docs.microsoft.com/en-us/aspnet/core/fundamentals/environments?view=aspnetcore-2.2
+                if (Configuration.GetSection("AppSettings")["UseLocalSecrets"] == "True")
+                {
+                    var sqlconnectionbuilder = new SqlConnectionStringBuilder();
+                    sqlconnectionbuilder.ConnectionString = "Database=UnicornStore;Trusted_Connection=False;MultipleActiveResultSets=true;Connect Timeout=30;";
+                    sqlconnectionbuilder.Password = Configuration["unicornstore-secret:password"];
+                    sqlconnectionbuilder.UserID = Configuration["unicornstore-secret:username"];
+                    sqlconnectionbuilder.DataSource = Configuration["unicornstore-secret:host"];
+                    _connection = sqlconnectionbuilder.ConnectionString;
+
+                    services.AddDbContext<UnicornStoreContext>(options =>
+                        options.UseSqlServer(_connection));
+                }
+
+                // Fallback to use InMemoryStore
+                else if (Configuration.GetSection("AppSettings")["UseInMemoryStore"] == "True")
+                {
+                    services.AddDbContext<UnicornStoreContext>(options =>
                     options.UseInMemoryDatabase("Scratch"));
+                }
+
             }
-            else
+            // Control whether to LocalDB is used on Windows boxes for local devleopment with AppSettings
+            else if (_platform.IsRunningOnWindows)
             {
-                services.AddDbContext<UnicornStoreContext>(options =>
+                // For local testing on Windows with User Secrets
+                // Read about secrets here: https://docs.microsoft.com/en-us/aspnet/core/fundamentals/environments?view=aspnetcore-2.2
+                if (Configuration.GetSection("AppSettings")["UseLocalSecrets"] == "True")
+                {
+                    var sqlconnectionbuilder = new SqlConnectionStringBuilder();
+                    sqlconnectionbuilder.ConnectionString = "Database=UnicornStore;Trusted_Connection=False;MultipleActiveResultSets=true;Connect Timeout=30;";
+                    sqlconnectionbuilder.Password = Configuration["unicornstore-secret:password"];
+                    sqlconnectionbuilder.UserID = Configuration["unicornstore-secret:username"];
+                    sqlconnectionbuilder.DataSource = Configuration["unicornstore-secret:host"];
+                    _connection = sqlconnectionbuilder.ConnectionString;
+
+                    services.AddDbContext<UnicornStoreContext>(options =>
+                        options.UseSqlServer(_connection));
+                }
+
+                // Fallback to use LocalDB. Connection string must be set in the appsettings.
+                else if (Configuration.GetSection("AppSettings")["UseLocalDB"] == "True")
+                {
+                    services.AddDbContext<UnicornStoreContext>(options =>
                     options.UseSqlServer(Configuration[StoreConfig.ConnectionStringKey.Replace("__", ":")]));
+                }
+            }
+
+            // Control whether to run the container in Fargate. 
+            // Relies on RDS Secrets from AWS Secrets Manager to be passed as Environment Variables to the container
+            if (Configuration.GetSection("AppSettings")["RunInFargate"] == "True")
+            {
+                var unicorn_envvariables = Configuration["unicornstore-secret"];
+                JObject parsed_json = JObject.Parse(unicorn_envvariables);
+
+                var sqlconnectionbuilder = new SqlConnectionStringBuilder();
+                sqlconnectionbuilder.ConnectionString = "Database=UnicornStore;Trusted_Connection=False;MultipleActiveResultSets=true;Connect Timeout=30;";
+                sqlconnectionbuilder.Password = (string)parsed_json["password"];
+                sqlconnectionbuilder.UserID = (string)parsed_json["username"];
+                sqlconnectionbuilder.DataSource = (string)parsed_json["host"];
+                _connection = sqlconnectionbuilder.ConnectionString;
+
+                services.AddDbContext<UnicornStoreContext>(options =>
+                    options.UseSqlServer(_connection));
             }
 
             // Add Identity services to the services container
@@ -97,20 +162,20 @@ namespace UnicornStore
 
             services.AddAuthentication()
                 .AddFacebook(options =>
-            {
-                options.AppId = "550624398330273";
-                options.AppSecret = "10e56a291d6b618da61b1e0dae3a8954";
-            })
+                {
+                    options.AppId = "550624398330273";
+                    options.AppSecret = "10e56a291d6b618da61b1e0dae3a8954";
+                })
                 .AddGoogle(options =>
-            {
-                options.ClientId = "995291875932-0rt7417v5baevqrno24kv332b7d6d30a.apps.googleusercontent.com";
-                options.ClientSecret = "J_AT57H5KH_ItmMdu0r6PfXm";
-            })
+                {
+                    options.ClientId = "995291875932-0rt7417v5baevqrno24kv332b7d6d30a.apps.googleusercontent.com";
+                    options.ClientSecret = "J_AT57H5KH_ItmMdu0r6PfXm";
+                })
                 .AddTwitter(options =>
-            {
-                options.ConsumerKey = "lDSPIu480ocnXYZ9DumGCDw37";
-                options.ConsumerSecret = "fpo0oWRNc3vsZKlZSq1PyOSoeXlJd7NnG4Rfc94xbFXsdcc3nH";
-            })
+                {
+                    options.ConsumerKey = "lDSPIu480ocnXYZ9DumGCDw37";
+                    options.ConsumerSecret = "fpo0oWRNc3vsZKlZSq1PyOSoeXlJd7NnG4Rfc94xbFXsdcc3nH";
+                })
             // The MicrosoftAccount service has restrictions that prevent the use of
             // http://localhost:5001/ for test applications.
             // As such, here is how to change this sample to uses http://ktesting.com:5001/ instead.
@@ -126,11 +191,11 @@ namespace UnicornStore
             // The sample app can then be run via:
             // dnx . web
                 .AddMicrosoftAccount(options =>
-            {
-                // MicrosoftAccount requires project changes
-                options.ClientId = "000000004012C08A";
-                options.ClientSecret = "GaMQ2hCnqAC6EcDLnXsAeBVIJOLmeutL";
-            });
+                {
+                    // MicrosoftAccount requires project changes
+                    options.ClientId = "000000004012C08A";
+                    options.ClientSecret = "GaMQ2hCnqAC6EcDLnXsAeBVIJOLmeutL";
+                });
         }
 
         //This method is invoked when ASPNETCORE_ENVIRONMENT is 'Development' or is not defined
