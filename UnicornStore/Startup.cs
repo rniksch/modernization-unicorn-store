@@ -57,9 +57,9 @@ namespace UnicornStore
                 {
                     var sqlconnectionbuilder = new SqlConnectionStringBuilder();
                     sqlconnectionbuilder.ConnectionString = "Database=UnicornStore;Trusted_Connection=False;MultipleActiveResultSets=true;Connect Timeout=30;";
-                    sqlconnectionbuilder.Password = Configuration["unicorn-secret:password"];
-                    sqlconnectionbuilder.UserID = Configuration["unicorn-secret:username"];
-                    sqlconnectionbuilder.DataSource = Configuration["unicorn-secret:host"];
+                    sqlconnectionbuilder.Password = Configuration["unicornstore-secret:password"];
+                    sqlconnectionbuilder.UserID = Configuration["unicornstore-secret:username"];
+                    sqlconnectionbuilder.DataSource = Configuration["unicornstore-secret:host"];
                     _connection = sqlconnectionbuilder.ConnectionString;
 
                     services.AddDbContext<UnicornStoreContext>(options =>
@@ -83,9 +83,9 @@ namespace UnicornStore
                 {
                     var sqlconnectionbuilder = new SqlConnectionStringBuilder();
                     sqlconnectionbuilder.ConnectionString = "Database=UnicornStore;Trusted_Connection=False;MultipleActiveResultSets=true;Connect Timeout=30;";
-                    sqlconnectionbuilder.Password = Configuration["unicorn-secret:password"];
-                    sqlconnectionbuilder.UserID = Configuration["unicorn-secret:username"];
-                    sqlconnectionbuilder.DataSource = Configuration["unicorn-secret:host"];
+                    sqlconnectionbuilder.Password = Configuration["unicornstore-secret:password"];
+                    sqlconnectionbuilder.UserID = Configuration["unicornstore-secret:username"];
+                    sqlconnectionbuilder.DataSource = Configuration["unicornstore-secret:host"];
                     _connection = sqlconnectionbuilder.ConnectionString;
 
                     services.AddDbContext<UnicornStoreContext>(options =>
@@ -99,11 +99,12 @@ namespace UnicornStore
                     options.UseSqlServer(Configuration[StoreConfig.ConnectionStringKey.Replace("__", ":")]));
                 }
             }
+
             // Control whether to run the container in Fargate. 
             // Relies on RDS Secrets from AWS Secrets Manager to be passed as Environment Variables to the container
-            else if (Configuration.GetSection("AppSettings")["RunInFargate"] == "True")
+            if (Configuration.GetSection("AppSettings")["RunInFargate"] == "True")
             {
-                var unicorn_envvariables = Configuration["unicorn-secret"];
+                var unicorn_envvariables = Configuration["unicornstore-secret"];
                 JObject parsed_json = JObject.Parse(unicorn_envvariables);
 
                 var sqlconnectionbuilder = new SqlConnectionStringBuilder();
